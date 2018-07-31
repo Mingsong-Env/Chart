@@ -1,0 +1,200 @@
+</div class="row">
+    <style type="text/css">
+     circle {
+        stroke: black;
+        stroke-width: 1px;
+        opacity: .8;
+      }
+      .btn-group {
+        margin-left: 330px;
+      }  
+   </style>
+     <div class="btn-group" data-toggle="buttons">
+      <label class="btn btn-primary active" id="STATE">
+        <input type="radio" name="options"> STATE
+      </label>
+      <label class="btn btn-primary" id="BROAD RESEARCH AREA">
+        <input type="radio" name="options"> BROAD RESEARCH AREA
+      </label>
+      <label class="btn btn-primary" id="FIELD OF RESEARCH">
+        <input type="radio" name="options"> FIELD OF RESEARCH
+      </label>
+      <label class="btn btn-primary" id="SECTOR">
+        <input type="radio" name="options"> SECTOR
+      </label>
+      <label class="btn btn-primary" id="GRANT SUB TYPE">
+        <input type="radio" name="options"> GRANT SUB TYPE
+      </label>
+    </div>
+    </div>
+    <div id="chart"></div>
+    <script src="/sites/all/libraries/d3/v3/d3.js"></script>
+    <script src="/sites/all/libraries/underscore/underscore.js"></script>
+    <script>
+    (function ($) {
+      d3.csv('/_files_nhmrc/file/data-2016.csv', function (error, data) {
+
+        var width = 1000, height = 600;
+        var fill = d3.scale.ordinal().range(['#827d92','#9b1537', '#033317','#72856a', '#c67803','#383435', '#2a3285','#827354'])
+        var svg = d3.select("#chart").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+		var rScale = d3.scale.pow().exponent(0.5).domain([0,100000000]).range([2,80]);
+
+        for (var j = 0; j < data.length; j++) {
+          data[j].radius = rScale(Math.abs(data[j]['BUDGET TOTAL']));
+          data[j].x = Math.random() * width;
+          data[j].y = Math.random() * height;
+        }
+
+        var padding = 2;
+        var maxRadius = d3.max(_.pluck(data, 'radius'));
+
+        var getCenters = function (vname, size) {
+          var centers, map;
+          centers = _.uniq(_.pluck(data, vname)).map(function (d) {
+            return {name: d, value: 1};
+          });
+		  
+		  var new_height = (centers.length / 5 + 1)  *  300;
+		   size[1] = new_height;
+		   svg.attr("height", new_height);
+		   height = new_height;
+
+          map = d3.layout.treemap().size(size).ratio(1/1);
+          map.nodes({children: centers});
+
+          return centers;
+        };
+
+        var nodes = svg.selectAll("circle")
+          .data(data);
+
+        nodes.enter().append("circle")
+          .attr("class", "node")
+          .attr("cx", function (d) { return d.x; })
+          .attr("cy", function (d) { return d.y; })
+          .attr("r", function (d) { return d.radius; })
+          .style("fill", function (d) { return fill(d['STATE']); })
+          .on("mouseover", function (d) { showPopover.call(this, d); })
+          .on("mouseout", function (d) { removePopovers(); })
+           .on("click", function(d){console.log(d['Id']);window.open("/nhmrc-grants/detail/" + d['Id']);});
+
+        var force = d3.layout.force();
+
+        draw('STATE');
+
+        $( ".btn" ).click(function() {
+          draw(this.id);
+        });
+
+        function draw (varname) {
+          var centers = getCenters(varname, [width, height]);
+		  
+          force.on("tick", tick(centers, varname));
+          labels(centers)
+          force.start();
+        }
+
+        function tick (centers, varname) {
+          var foci = {};
+          for (var i = 0; i < centers.length; i++) {
+            foci[centers[i].name] = centers[i];
+          }
+          return function (e) {
+            for (var i = 0; i < data.length; i++) {
+              var o = data[i];
+              var f = foci[o[varname]];
+              o.y += ((f.y + (f.dy / 2)) - o.y) * e.alpha;
+              o.x += ((f.x + (f.dx / 2)) - o.x) * e.alpha;
+            }
+            nodes.each(collide(.11))
+              .attr("cx", function (d) { return d.x; })
+              .attr("cy", function (d) { return d.y; });
+          }
+        }
+
+        function labels (centers) {
+          svg.selectAll(".label").remove();
+
+          svg.selectAll(".label")
+          .data(centers).enter().append("text")
+          .attr("class", "label")
+          .text(function (d) { return d.name })
+          .attr("transform", function (d) {
+            return "translate(" + (d.x + (d.dx / 2)) + ", " + (d.y + 20) + ")";
+          })
+          .call(wrap, 120);
+        }
+
+      function removePopovers () {
+          $('.popover').each(function() {
+            $(this).remove();
+          }); 
+        }
+
+        function showPopover (d) {
+          $(this).popover({
+            placement: 'auto top',
+            container: 'body',
+            trigger: 'manual',
+            html : true,
+            content: function() { 
+              return "STATE: " + d['STATE'] + "<br/>Title: " + d['GRANT TITLE'] + "<br/> BUDGET TOTAL: $" + parseInt(d['BUDGET TOTAL']).toFixed(2).replace(/(\d)(?=(\d{3})+\.)/g, '$1,') + "<br/>Click to see the grant details"; }
+          });
+          $(this).popover('show')
+        }
+
+        function collide(alpha) {
+          var quadtree = d3.geom.quadtree(data);
+          return function (d) {
+            var r = d.radius + maxRadius + padding,
+                nx1 = d.x - r,
+                nx2 = d.x + r,
+                ny1 = d.y - r,
+                ny2 = d.y + r;
+            quadtree.visit(function(quad, x1, y1, x2, y2) {
+              if (quad.point && (quad.point !== d)) {
+                var x = d.x - quad.point.x,
+                    y = d.y - quad.point.y,
+                    l = Math.sqrt(x * x + y * y),
+                    r = d.radius + quad.point.radius + padding;
+                if (l < r) {
+                  l = (l - r) / l * alpha;
+                  d.x -= x *= l;
+                  d.y -= y *= l;
+                  quad.point.x += x;
+                  quad.point.y += y;
+                }
+              }
+              return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+            });
+          };
+        }
+       
+       function wrap(text, width) {
+		  text.each(function() {
+			var text = d3.select(this),
+				words = text.text().split(/\s+/).reverse(),
+				word,
+				line = [],
+				lineNumber = 0,
+				lineHeight = 1.1, // ems
+				y = text.attr("y"),
+				//dy = parseFloat(text.attr("dy")),
+				tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", "0.2em");
+			while (word = words.pop()) {
+			  line.push(word);
+			  tspan.text(line.join(" "));
+			  if (tspan.node().getComputedTextLength() > width) {
+				line.pop();
+				tspan.text(line.join(" "));
+				line = [word];
+				tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", "1em").text(word);
+			  }
+			}
+		  });
+		}
+      });
+  }(jQuery));
+    </script>

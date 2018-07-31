@@ -1,0 +1,361 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>dc.js - US Venture Capital Landscape 2011</title>
+
+    <meta charset="UTF-8">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="css/dc.css"/>
+</head>
+<body>
+<style>
+  div#sector-pie-chart {
+    margin-left: 18px;
+  }
+  /* testing out d3 tooltip */
+    .d3-tip {
+      line-height: 1;
+      font-weight: bold;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 8px;
+    }
+
+    /* Creates a small triangle extender for the tooltip */
+    .d3-tip:after {
+      box-sizing: border-box;
+      display: inline;
+      font-size: 10px;
+      width: 100%;
+      line-height: 1;
+      color: rgba(0, 0, 0, 0.8);
+      content: "\25BC";
+      position: absolute;
+      text-align: center;
+    }
+
+    /* Style northward tooltips differently */
+    .d3-tip.n:after {
+      margin: -1px 0 0 0;
+      top: 100%;
+      left: 0;
+    }
+
+</style>
+<div class="container">
+
+    <h2>NHMRC Grants 2000 - 2015</h2>
+
+    <p>
+       This page shows all NHMRC grants finished from 2000 to 2015
+    </p>
+	<div>
+        <a href="javascript:dc.filterAll(); dc.renderAll();initial();">Reset All</a>
+    </div>
+
+    <div id="au-map-chart">
+         <ol class="legend" style="    position: absolute;top: 208px;">
+          <li style="background-color: #E2F2FF"> &nbsp;&lt; 0.5G</li>
+          <li style="background-color: #C4E4FF;">0.5G-1G</li>
+          <li style="background-color: #9ED2FF;">1G-1.5G</li>
+          <li style="background-color: #81C5FF;">1.5G-2G</li>
+          <li style="background-color: #6BBAFF;">2G-2.5G</li>
+          <li style="background-color: #51AEFF;">2.5G-3G</li>
+          <li style="background-color: #36A2FF;">3G-3.5G</li>
+          <li style="background-color: #1E96FF;">3.5G-4G</li>
+          <li style="background-color: #0089FF;">4G-4.5G</li>
+          <li style="background-color: #0061B5;">5G</li>
+        </ol>
+        <strong>Grants by States (color: total amount of grants)</strong>
+        <a class="reset" href="javascript:auChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+        <span class="reset" style="display: none;"> | State selected: <span class="filter"></span></span>
+        <div class="clearfix"></div>
+    </div>
+
+    <div class="clearfix"></div>
+    <div class="row">
+		<div id = "yearly-move-chart">
+			<div>
+				<strong>Yearly Budget:</strong>
+				<a class="reset" href="javascript:yearlyChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+				<div>
+					<span class="reset" style="display: none;"><div class="filter" style="max-width: 200px;"></div></span>
+				</div>
+				<div class="clearfix"></div>
+			</div>
+		</div>
+		<div id="area-pie-chart">
+            <div><strong>BROAD RESEARCH AREA:</strong><a class="reset" href="javascript:areaPieChart.filterAll();dc.redrawAll();" style="display: none;">reset</a></div>
+				<div>
+					<span class="reset" style="display: none;"><div class="filter" style="max-width: 200px;"></div></span>
+				</div>
+                <div class="clearfix"></div>
+        </div>
+		<div id="sector-pie-chart">
+            <div><strong>Sectors:</strong><a class="reset" href="javascript:sectorPieChart.filterAll();dc.redrawAll();" style="display: none;">reset</a></div>
+				<div>
+					<span class="reset" style="display: none;"><div class="filter" style="max-width: 200px;"></div></span>
+				</div>
+                <div class="clearfix"></div>
+        </div>
+    </div>
+
+    <div class="clearfix"></div>
+    <div class="row">
+		<div>
+			<div class="dc-data-count" id="expenseTarget-data-count">
+				<span class="filter-count"></span> selected out of <span class="total-count"></span> records <span><button class="btn" id="download">download selected data</button></span>
+			</div>
+		</div>
+	</div>
+		<BR>
+		<table class="table table-hover dc-data-table" id="expenseTarget-data-table">
+			<thead>
+			<tr class="header">
+				<th>GRANT TITLE</th>
+				<th>ADMINISTERING INSTITUTION</th>
+				<th>Amount <span style="font-size: 11px">($)</span></th>
+				<th>Year</th>
+			</tr>
+			</thead>
+		</table>
+</div>
+
+<script type="text/javascript" src="js/d3.v3.min.js"></script>
+<script type="text/javascript" src="js/d3.tip.js"></script>
+<script type="text/javascript" src="js/crossfilter.js"></script>
+<script type="text/javascript" src="js/dc.min.js"></script>
+<script type="text/javascript" src="js/FileSaver.js"></script>
+<script type="text/javascript">
+    var numberFormat = d3.format(",.3f");
+	var integerFormat = d3.format(",d");
+	var currencyFormat = d3.format("$.5s");
+
+    var auChart = dc.geoChoroplethChart("#au-map-chart");
+    var yearlyChart = dc.barChart('#yearly-move-chart');
+	var areaPieChart = dc.pieChart("#area-pie-chart");
+	var sectorPieChart = dc.pieChart("#sector-pie-chart");
+	
+	var map_h = 700, w = 990;
+
+	// tooltips for pie chart
+	var pieTip = d3.tip()
+		  .attr('class', 'd3-tip')
+		  .offset([-10, 0])
+		  .html(function (d) { return "<span style='color: #f0027f'>" +  d.data.key + "</span> : "  + currencyFormat(d.value); });
+	
+	// tooltips for bar chart
+	var barTip = d3.tip()
+		  .attr('class', 'd3-tip')
+		  .offset([-10, 0])
+		  .html(function (d) { return "<span style='color: #f0027f'>" + d.data.key + "</span> : " + currencyFormat(d.y);});
+
+
+	
+	var projection = d3.geo.conicConformal()
+        .rotate([-132, 0])
+        .center([0, -27])
+        .parallels([-18, -36])
+        .scale(Math.min(map_h * 1.2, w * 1.1))
+        .translate([w / 2, map_h / 2])
+        .precision(0.1);
+	
+	var initial = function(d) {
+			// rotate the x Axis labels for yearly bar chart
+			d3.selectAll("g.x text")
+				.attr("class", "campusLabel")
+				.style("text-anchor", "end") 
+				.attr("transform", "translate(-10,0)rotate(315)");
+			d3.select('#download')
+				.on('click', function() {
+					var downloadData = moveYears.top(Infinity);
+					
+					var blob = new Blob([d3.csv.format(downloadData)], {type: "text/csv;charset=utf-8"});
+					saveAs(blob, 'data.csv');
+				});
+			
+			d3.selectAll(".pie-slice").call(pieTip);
+			d3.selectAll(".pie-slice")
+					.on('mouseover', pieTip.show)
+					.on('mouseout', pieTip.hide);
+
+			d3.selectAll(".bar").call(barTip);
+			d3.selectAll(".bar")
+				.on('mouseover', barTip.show)
+				.on('mouseout', barTip.hide); 
+	};
+
+    d3.csv("grants.csv", function (csv) {
+        var data = crossfilter(csv);
+		
+		var all = data.groupAll();
+		
+		var totalBudget = d3.sum(csv, function(d){return +d["BUDGET TOTAL"];});
+
+        var states = data.dimension(function (d) {
+            return d["STATE"];
+        });
+        var stateRaisedSum = states.group().reduceSum(function (d) {
+            return +d["BUDGET TOTAL"];
+        });
+
+        var moveYears = data.dimension(function (d) {
+           return d['END YR'];
+        });
+		
+		var researchArea = data.dimension(function (d) {
+           return d['BROAD RESEARCH AREA'];
+        });
+		
+		var sector = data.dimension(function (d) {
+           return d['SECTOR'];
+        });
+        
+		var areaGroup = researchArea.group().reduceSum(function (d) {return +d['BUDGET TOTAL'];});
+		
+		var sectorGroup = sector.group().reduceSum(function (d) {return +d['BUDGET TOTAL'];});
+		
+        var yearsGroup = moveYears.group().reduceSum(function (d) {return +d['BUDGET TOTAL'];});
+		
+		var budgetColors = ["#E2F2FF", "#C4E4FF", "#9ED2FF", "#81C5FF", "#6BBAFF", "#51AEFF", "#36A2FF", "#1E96FF", "#0089FF", "#0061B5"];
+
+        d3.json("au-states.geojson", function (statesJson) {
+            auChart.width(w)
+                    .height(map_h)
+                    .dimension(states)
+                    .group(stateRaisedSum)
+                    .colors(budgetColors)
+                    .colorDomain([0, 5000000000])
+                    .colorAccessor(function (d) {return d;})
+                    .overlayGeoJson(statesJson.features, "state", function (d) {
+                        return d.properties.STATE_NAME;
+                    })
+					.projection( projection)
+                    .valueAccessor(function(kv) {
+                    return kv.value;
+                })
+                    .title(function (d) {
+                        return "State: " + d.key + "\nTotal Amount of grants: $" + integerFormat(d.value ? d.value : 0);
+                    });
+			
+			yearlyChart
+			.transitionDuration(750)
+			.width(500)
+			.height(460)
+			.margins({top: 20, right: 10, bottom: 30, left: 42})
+			.yAxisLabel("Grants Budget")
+			.dimension(moveYears)
+			.group(yearsGroup)
+			.x(d3.scale.ordinal().domain(d3.range(2000, 2023)))
+			.gap(1)
+            .xUnits(dc.units.ordinal)
+            .elasticX(false)
+            .elasticY(true)
+			.centerBar(false)
+            .brushOn(false)
+			.renderHorizontalGridLines(true)
+			.yAxis().ticks(3).tickFormat(d3.format("$s"));
+			
+			areaPieChart.width(220)
+                    .height(220)    
+                    .transitionDuration(750)
+                    .radius(95)
+                    .innerRadius(20)
+                    .dimension(researchArea)
+                    .title(function (d) {return ""; })
+                    .group(areaGroup)
+                    .colors(['#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#dadaeb'])
+                    .colorDomain(d3.range(0, 5))
+                    .colorAccessor(function (d, i) {return i;})
+                    .renderLabel(false);
+					
+			sectorPieChart /* dc.pieChart('#gain-loss-chart', 'chartGroup') */
+			// (_optional_) define chart width, `default = 200`
+				.width(220)
+			// (optional) define chart height, `default = 200`
+				.height(220)
+			// Define pie radius
+				.radius(95)
+			// Set dimension
+				.dimension(sector)
+			// Set group
+				.group(sectorGroup)
+			// (_optional_) by default pie chart will use `group.key` as its label but you can overwrite it with a closure.
+				.label(function (d) {
+				     if (sectorPieChart.hasFilter() && !sectorPieChart.hasFilter(d.key)) {
+					 return d.key + '(0%)';
+					}
+					var label = d.key;
+					if (all) {
+						var percentage = Math.floor(d.value / totalBudget * 100);
+						if (percentage < 10) {
+							return '';
+						}
+						label += '(' + percentage + '%)';
+					}				
+					return label;
+				})
+			/*
+				// (_optional_) whether chart should render labels, `default = true`
+				.renderLabel(true)
+				// (_optional_) if inner radius is used then a donut chart will be generated instead of pie chart
+				.innerRadius(40) */
+				// (_optional_) define chart transition duration, `default = 350`
+				.transitionDuration(750)
+				// (_optional_) define color array for slices
+				.colors(['#dadaeb', '#c6dbef', '#9ecae1', '#6baed6', '#3182bd'])
+				// (_optional_) define color domain to match your data domain if you want to bind data or color
+				.colorDomain(d3.range(0, 5))
+				// (_optional_) define color value accessor
+				.colorAccessor(function(d, i){console.log(d);return i;})
+				;
+	
+			
+			dc.dataCount(".dc-data-count")
+                    .dimension(data)
+                    .group(all);
+
+            dc.dataTable(".dc-data-table")
+                    .dimension(moveYears)
+                    .group(function (d) {
+                        return d['GRANT SUB TYPE'];
+                    })
+                    .size(170)
+                    .columns([
+                        function (d) {
+                            return d['GRANT TITLE'];
+                            ;
+                        },
+						function (d) {
+						  return d['ADMINISTERING INSTITUTION'];
+						},
+                        function (d) {
+                            return "$" + integerFormat(d['BUDGET TOTAL']);
+                        },
+                        function (d) {
+                            return d['END YR'];
+                        }
+                    ])
+                    .sortBy(function (d) {
+                        return +d['BUDGET TOTAL'];
+                    })
+                    .order(d3.descending)
+                    .on('renderlet', function (table) {
+						table.selectAll('.dc-table-group').classed('info', true);
+					});
+		
+
+			dc.renderAll();
+			
+			initial();
+		
+        });
+	
+    });
+
+</script>
+</body>
+</html>

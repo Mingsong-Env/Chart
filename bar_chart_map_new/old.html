@@ -1,0 +1,129 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>dc.js - US Venture Capital Landscape 2011</title>
+
+    <meta charset="UTF-8">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="css/dc.css"/>
+</head>
+<body>
+
+<div class="container">
+
+    <h2>NHMRC Grants 2000 - 2015</h2>
+
+    <p>
+       This page shows all NHMRC grants finished from 2000 to 2015
+    </p>
+
+    <div id="au-map-chart">
+         <ol class="legend" style="    position: absolute;top: 208px;">
+          <li style="background-color: #E2F2FF"> &nbsp;&lt; 1B</li>
+          <li style="background-color: #C4E4FF;">1B-  2B</li>
+          <li style="background-color: #9ED2FF;">2B - 3B</li>
+          <li style="background-color: #81C5FF;">3B - 4B</li>
+          <li style="background-color: #6BBAFF;">4B - 5B</li>
+          <li style="background-color: #51AEFF;">5B - 6B</li>
+          <li style="background-color: #36A2FF;">6B - 7B</li>
+          <li style="background-color: #1E96FF;">7B - 8B</li>
+          <li style="background-color: #0089FF;">8B - 9B</li>
+          <li style="background-color: #0061B5;">10B</li>
+        </ol>
+        <strong>Grants by States (color: total amount of grants)</strong>
+        <a class="reset" href="javascript:auChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+        <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
+
+        <div class="clearfix"></div>
+    </div>
+
+    <div class="clearfix"></div>
+    <div class="row">
+      <div id = "yearly-move-chart">
+    
+        <div class="clearfix"></div>
+     
+      </div>
+     </div>
+
+    <div class="clearfix"></div>
+
+    <div>
+        <a href="javascript:dc.filterAll(); dc.renderAll();">Reset All</a>
+    </div>
+
+</div>
+
+<script type="text/javascript" src="js/d3.js"></script>
+<script type="text/javascript" src="js/crossfilter.js"></script>
+<script type="text/javascript" src="js/dc.min.js"></script>
+<script type="text/javascript">
+    var numberFormat = d3.format(".2f");
+
+    var auChart = dc.geoChoroplethChart("#au-map-chart");
+    var yearlyChart = dc.barChart('#yearly-move-chart');
+	
+	var map_h = 700, w = 990;
+	
+	var projection = d3.geo.conicConformal()
+        .rotate([-132, 0])
+        .center([0, -27])
+        .parallels([-18, -36])
+        .scale(Math.min(map_h * 1.2, w * 1.1))
+        .translate([w / 2, map_h / 2])
+        .precision(0.1);
+
+    d3.csv("grants.csv", function (csv) {
+        var data = crossfilter(csv);
+
+        var states = data.dimension(function (d) {
+            return d["STATE"];
+        });
+        var stateRaisedSum = states.group().reduceSum(function (d) {
+            return d["BUDGET TOTAL"];
+        });
+
+         var moveYears = data.dimension(function (d) {
+           return new Date(d['END YR'], 0, 1);
+        });
+        
+        var yearsGroup = moveYears.group(d3.time.year);
+
+        d3.json("au-states.geojson", function (statesJson) {
+            auChart.width(w)
+                    .height(map_h)
+                    .dimension(states)
+                    .group(stateRaisedSum)
+                    .colors(d3.scale.quantize().range(["#E2F2FF", "#C4E4FF", "#9ED2FF", "#81C5FF", "#6BBAFF", "#51AEFF", "#36A2FF", "#1E96FF", "#0089FF", "#0061B5"]))
+                    .colorDomain([0, 10])
+                    .colorCalculator(function (d) { console.log(d);return d ? auChart.colors()(d) : '#ccc'; })
+                    .overlayGeoJson(statesJson.features, "state", function (d) {
+                        return d.properties.STATE_NAME;
+                    })
+					.projection( projection)
+                    .valueAccessor(function(kv) {
+                    
+                    return kv.value / 1000000000.0;
+                })
+                    .title(function (d) {
+                        return "State: " + d.key + "\nTotal Amount of grants: " + numberFormat(d.value ? d.value : 0) + "B";
+                    });
+
+            dc.renderAll();
+        });
+
+        yearlyChart
+			.width(768)
+			.height(480)
+			.x(d3.time.scale().domain([new Date(2000, 0, 1), new Date(2015, 11, 31)]))
+			.xUnits(d3.time.years)
+			.brushOn(true)
+			.yAxisLabel("The amount of grants!")
+			.dimension(moveYears)
+			.group(yearsGroup) 
+    });
+</script>
+</body>
+</html>
